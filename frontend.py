@@ -5,6 +5,9 @@ LockLM - Gradio Frontend
 
 import json
 import gradio as gr
+import blocker
+
+
 from llm_backend import (
     rubric_reply,
     extract_rubric,
@@ -25,12 +28,20 @@ def make_fresh_state():
         "conversation": [],
         "evaluations": [],
         "attempt": 0,
+        "blocked_apps": [],
+        "blocker_running": False,
     }
 
 
-def handle_goal(user_message, state):
+def handle_goal(user_message, state, selected_apps):
     state["goal"] = user_message.strip()
+    state["blocked_apps"] = selected_apps or []
     state["phase"] = "rubric"
+
+    # Start blocker immediately when user enters goal
+    if not state["blocker_running"] and state["blocked_apps"]:
+        blocker.start(state["blocked_apps"])
+        state["blocker_running"] = True
 
     state["rubric_conversation"] = [
         {"role": "user", "content": f"My goal is: {state['goal']}\n\nPropose a rubric for checking my progress."}
@@ -43,6 +54,7 @@ def handle_goal(user_message, state):
 
 
 def handle_rubric(user_message, state):
+
     state["rubric_conversation"].append({"role": "user", "content": user_message})
 
     reply = rubric_reply(state["rubric_conversation"])
@@ -121,6 +133,7 @@ def handle_confirm(user_message, state):
             "evaluations": state["evaluations"],
         })
         state["phase"] = "done"
+        blocker.stop()
         return f"Great work! Thank you for using LockLM!", state
     else:
         state["phase"] = "working"
@@ -162,7 +175,7 @@ PHASE_INFO = {
 }
 
 
-def respond(user_message, chat_history, state):
+def respond(user_message, chat_history, state, selected_apps):
     if not user_message.strip():
         return "", chat_history, state
 
@@ -173,7 +186,10 @@ def respond(user_message, chat_history, state):
     handler = HANDLERS.get(state["phase"])
     current_phase = state["phase"]
     if handler:
-        reply, state = handler(user_message, state)
+        if current_phase == "goal":
+            reply, state = handler(user_message, state, selected_apps)
+        else:
+            reply, state = handler(user_message, state)
 
         if current_phase == "submitting":
             display = f"[Submission Attempt {state['attempt']} Received]"
@@ -192,6 +208,11 @@ def build_ui():
     ) as app:
 
         state = gr.State(make_fresh_state())
+
+        app_list = gr.CheckboxGroup(
+        choices=["Discord", "Steam", "Chrome", "Spotify"],
+        label="Select apps to block during focus mode"
+        )
 
         gr.HTML("""
         <div class="header">
@@ -213,21 +234,21 @@ def build_ui():
             )
             send_btn = gr.Button("Send", variant="primary", scale=1)
 
-        def on_send(user_message, chat_history, state):
-            _, updated_history, updated_state = respond(user_message, chat_history, state)
+        def on_send(user_message, chat_history, state, selected_apps):
+            _, updated_history, updated_state = respond(user_message, chat_history, state, selected_apps)
             label, placeholder = PHASE_INFO.get(updated_state["phase"], ("", ""))
             phase_md = f"<div class='phase-bar'>{label}</div>"
             return "", updated_history, updated_state, phase_md, gr.update(placeholder=placeholder)
 
         send_btn.click(
             fn=on_send,
-            inputs=[msg_input, chatbot, state],
+            inputs=[msg_input, chatbot, state, app_list],
             outputs=[msg_input, chatbot, state, phase_display, msg_input],
         )
 
         msg_input.submit(
             fn=on_send,
-            inputs=[msg_input, chatbot, state],
+            inputs=[msg_input, chatbot, state, app_list],
             outputs=[msg_input, chatbot, state, phase_display, msg_input],
         )
 
