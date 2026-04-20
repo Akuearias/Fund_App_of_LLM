@@ -172,8 +172,27 @@ def save_session(data):
     with open(filename, "w") as f:
         json.dump(data, f, indent=2)
     print(f"\nSession saved to {filename}")
- 
- 
+    return filename
+
+
+def rubric_reply(conversation):
+    res = client.responses.create(
+        model=MODEL,
+        instructions=RUBRIC_INSTRUCTIONS,
+        input=conversation,
+        temperature=0.4,
+    )
+    return res.output_text.strip()
+
+
+def extract_rubric(reply):
+    if "[FINAL RUBRIC]" in reply and "[END RUBRIC]" in reply:
+        start = reply.index("[FINAL RUBRIC]")
+        end = reply.index("[END RUBRIC]") + len("[END RUBRIC]")
+        return reply[start:end]
+    return None
+
+
  # running LockLM session
 def main(): 
     goal = input("Enter your goal:\n> ").strip()
@@ -259,9 +278,9 @@ def main():
                         "conversation": conversation,
                         "evaluations": evaluations,
                     })
+                    break
                 else:
-                    print("Evaluation discarded.")
-                break
+                    print("Evaluation discarded. You can keep chatting or resubmit.\n")
             else:
                 print("Below threshold.\n")
                 reply = coach(
