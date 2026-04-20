@@ -42,7 +42,7 @@ Output the final rubric between [FINAL RUBRIC] and [END RUBRIC] tags.
 Only use these tags when the user has explicitly agreed."""
 
 
-# phase for rubric negotation - user goes back and forth until the rubric is finalized. 
+# phase for rubric negotation: user goes back and forth until the rubric is finalized. 
 def negotiate_rubric(goal):
     conversation = [
         {"role": "user", "content": f"My goal is: {goal}\n\nPropose a rubric for checking my progress."}
@@ -100,7 +100,7 @@ Your job:
 - Answer questions, give tips, help them plan their approach
 - You know what the rubric expects, so nudge them in the right direction
 - Be concise and direct
-- Do NOT do the work for them"""
+- Do NOT do the work for them or give them answers/drafts. Instead, guide them to do it themselves."""
  
  
 def coach(message, conversation, instructions):
